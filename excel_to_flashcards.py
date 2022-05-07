@@ -2,49 +2,9 @@ import argparse
 import math
 from pathlib import Path
 
-from fillpdf import fillpdfs
 from openpyxl import load_workbook
 from fpdf import FPDF
 from tqdm import tqdm
-
-
-def fill_form():
-    wb2 = load_workbook(filename='Vocabulario.xlsx')
-    ws2 = wb2.active
-    # save all the rows as a list of tupes
-    rows = [(row[0].value, row[1].value) for row in ws2.iter_rows()]
-    rows = rows[1:] # remove the first row header
-
-    current_page = 0
-    # open the pdf file and fill the fields with the values from the dictionary
-    # get the number of fields in the pdf
-    num_fields = fillpdfs.get_form_fields('3x3.pdf')
-    #infer the dimensions of an array from the name of the fields, beginning in a_11 up to a_nn
-    indices = [int(field[2:]) for field in num_fields]
-    # get the maximum index
-    max_index = max(indices)
-    pdf_rows, pdf_cols = str(max_index)[0], str(max_index)[1]
-    print(f"pdf is a {pdf_rows}x{pdf_cols} grid")
-    numer_of_words_per_page = int(pdf_rows) * int(pdf_cols)
-    fields = rows[current_page * numer_of_words_per_page:(current_page + 1) * numer_of_words_per_page]
-    row_dicts = {f"a_{r}{c}": None for c in range(1, int(pdf_cols) + 1) for r in range(1, int(pdf_rows) + 1)}
-    print(row_dicts)
-    a_side = row_dicts.copy()
-    b_side = row_dicts.copy()
-
-    # fill the a_side dictionary with the first values of the rows
-    for index, (key, _) in enumerate(fields):
-        cell_index = f"a_{index // int(pdf_rows)+ 1}{index % int(pdf_cols) + 1}"
-        a_side[cell_index] = key
-
-    # fill the b_side dictionary with the second values of the rows
-    for index, (_, value) in enumerate(fields):
-        cell_index = f"a_{index // int(pdf_rows)+ 1}{int(pdf_cols)- index % int(pdf_cols) }"
-        b_side[cell_index] = value
-    print(a_side)
-    print(b_side)
-    fillpdfs.write_fillable_pdf('3x3.pdf', '3x3_aleman_1.pdf', a_side)
-    fillpdfs.write_fillable_pdf('3x3.pdf', '3x3_spanisch_1.pdf', b_side)
 
 
 def page_format_to_dimensions(page_format, orientation='P'):
