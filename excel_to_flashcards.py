@@ -62,17 +62,50 @@ def extract_page_from_excel(excel_rows, page_number, page_rows, page_cols):
     return first_values, second_values
 
 
-def create_pdf_from_excel(excel_file, num_rows=3, num_cols=3, output_file='output.pdf', merge_sheets=False):
+def list_excel_sheets(excel_file):
+    wb = load_workbook(excel_file)
+    return wb.sheetnames
+
+
+def create_pdf_from_excel(excel_file, num_rows=3, num_cols=3,
+                          output_file='output.pdf', merge_sheets=False, selected_sheets=None):
     if merge_sheets:
         pdf = FPDF(format='A4', orientation='L')
         pdf.set_auto_page_break(False)
+    # if the output_file argument is None, use the name of the excel file
+    if output_file is None:
+        output_file = Path(excel_file).stem + '.pdf'
     page_size = num_rows * num_cols
     wb2 = load_workbook(filename=excel_file, read_only=True)
+    the_sheets = wb2.worksheets
+    if selected_sheets:
+        the_sheets = [the_sheets[sheet] for sheet in selected_sheets]
+
     output_path = Path(output_file)
-    for sheet in tqdm(wb2.worksheets):
-        if not merge_sheets:
-            pdf = FPDF(format='A4', orientation='L')
-            pdf.set_auto_page_break(False)
+    if merge_sheets:
+        create_merged_pdf(num_cols, num_rows, output_file, page_size, pdf, the_sheets)
+    else:
+        create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, pdf, the_sheets)
+
+
+def create_merged_pdf(num_cols, num_rows, output_file, page_size, pdf, the_sheets):
+    rows = []
+    for sheet in tqdm(the_sheets):
+        sheet_rows = [(row[0].value, row[1].value) for row in sheet.iter_rows()]
+        sheet_rows = sheet_rows[1:]  # remove the first row header
+        rows.extend(sheet_rows)
+    num_pages = math.ceil(len(rows) / page_size)
+    for page_number in range(num_pages):
+        first_values, second_values = extract_page_from_excel(rows, page_number, num_rows, num_cols)
+        create_pdf_page(pdf, text_values=first_values, default_text='', num_rows=num_rows, num_cols=num_cols)
+        create_pdf_page(pdf, text_values=second_values, default_text='', num_rows=num_rows, num_cols=num_cols)
+    pdf.output(output_file, 'F')
+
+
+def create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, pdf, the_sheets):
+    for sheet in tqdm(the_sheets):
+        pdf = FPDF(format='A4', orientation='L')
+        pdf.set_auto_page_break(False)
         rows = [(row[0].value, row[1].value) for row in sheet.iter_rows()]
         rows = rows[1:]  # remove the first row header
         # the number of pages is the number of rows divided by the page size, rounded up
@@ -81,22 +114,29 @@ def create_pdf_from_excel(excel_file, num_rows=3, num_cols=3, output_file='outpu
             first_values, second_values = extract_page_from_excel(rows, page_number, num_rows, num_cols)
             create_pdf_page(pdf, text_values=first_values, default_text='', num_rows=num_rows, num_cols=num_cols)
             create_pdf_page(pdf, text_values=second_values, default_text='', num_rows=num_rows, num_cols=num_cols)
-        if not merge_sheets:
-            # append the name of the sheet to the output file and save it using pathlib
-            sheet_output_file = output_path.with_name(f"{output_path.stem}_{sheet.title}.pdf")
-            pdf.output(sheet_output_file)
-    if merge_sheets:
-        pdf.output(output_file, 'F')
+        # append the name of the sheet to the output file and save it using pathlib
+        sheet_output_file = output_path.with_name(f"{output_path.stem}_{sheet.title}.pdf")
+        pdf.output(sheet_output_file)
 
 
 if __name__ == '__main__':
     # read arguments from the command line and create the pdf
     parser = argparse.ArgumentParser(description='Create a pdf from an excel file')
-    parser.add_argument('-f', '--file', type=str, help='The excel file to read from')
+    parser.add_argument('-f', '--file', type=str, help='The excel file to read from', required=True)
     parser.add_argument('-r', '--rows', type=int, help='The number of rows per page', default=3)
     parser.add_argument('-c', '--cols', type=int, help='The number of columns per page', default=3)
     parser.add_argument('-o', '--output', type=str, help='The output file')
     parser.add_argument('-m', '--merge', action='store_true', help='Merge all sheets into one pdf', default=False)
+    parser.add_argument('-s', '--show', action='store_true', help='Show the sheets in the excel file', default=False)
+    # argument to select the sheets to merge
+    parser.add_argument('-t', '--sheets', type=int, help='The sheets to merge', nargs='+')
     args = parser.parse_args()
-    create_pdf_from_excel(args.file, args.rows, args.cols, args.output, merge_sheets=args.merge)
+    if not args.show:
+        create_pdf_from_excel(args.file, args.rows, args.cols, args.output,
+                              merge_sheets=args.merge, selected_sheets=args.sheets)
+    else:
+        sheets = list_excel_sheets(args.file)
+        # print the sheets in the excel file, one each line
+        for index, sheet in enumerate(sheets):
+            print(f'{index} - {sheet}')
     print("Done")
