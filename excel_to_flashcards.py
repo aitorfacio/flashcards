@@ -17,7 +17,7 @@ def page_format_to_dimensions(page_format, orientation='P'):
 
 def create_pdf_page(pdf, text_values=[], num_rows=3, num_cols=3,
                     page_format='A4',
-                    orientation='L', default_text=None):
+                    orientation='L', default_text=None, dashed_lines=False):
     height, width = page_format_to_dimensions(page_format, orientation)
     #border_x = 10
     #border_y = 0
@@ -42,8 +42,40 @@ def create_pdf_page(pdf, text_values=[], num_rows=3, num_cols=3,
                     text = f"a_{row+1}{col+1}"
                 else:
                     text = default_text
-            pdf.cell(rect_width, rect_height, text, 1, line, 'C')
+            pdf.cell(rect_width, rect_height, text, 0, line, 'C')
             index += 1
+        # print dashed lines
+        if dashed_lines:
+            # print two vertical dashed line in a third of the width
+            # the coordinates are as folows:
+            # x1 the x-coordinate of the start of the line, a third of the width from the left side of the page
+            # y1 the y-coordinate of the start of the line, the top of the page
+            # x2 the x-coordinate of the end of the line, a third of the width from the left side of the page
+            # y2 the y-coordinate of the end of the line, the bottom of the page
+            pdf.dashed_line(width / 3, 0, width / 3, height)
+            # print a horizontal dashed line in a third of the height
+            # the coordinates are as folows:
+            # x1 the x-coordinate of the start of the line, the left side of the page
+            # y1 the y-coordinate of the start of the line, a third of the height from the top of the page
+            # x2 the x-coordinate of the end of the line, the right side of the page
+            # y2 the y-coordinate of the end of the line, a third of the height from the top of the page
+            pdf.dashed_line(0, height / 3, width, height / 3)
+            # print a vertical dashed line in two thirds of the width
+            # the coordinates are as folows:
+            # x1 the x-coordinate of the start of the line, two thirds of the width from the left side of the page
+            # y1 the y-coordinate of the start of the line, the top of the page
+            # x2 the x-coordinate of the end of the line, two thirds of the width from the left side of the page
+            # y2 the y-coordinate of the end of the line, the bottom of the page
+            pdf.dashed_line(width * 2 / 3, 0, width * 2 / 3, height)
+            # print a horizontal dashed line in a third of the height
+            # the coordinates are as folows:
+            # x1 the x-coordinate of the start of the line, the left side of the page
+            # y1 the y-coordinate of the start of the line, two thirds of the height from the top of the page
+            # x2 the x-coordinate of the end of the line, the right side of the page
+            # y2 the y-coordinate of the end of the line, two thirds of the height from the top of the page
+            pdf.dashed_line(0, height * 2 / 3, width, height * 2 / 3)
+
+
 
 
 def extract_page_from_excel(excel_rows, page_number, page_rows, page_cols):
@@ -85,7 +117,7 @@ def create_pdf_from_excel(excel_file, num_rows=3, num_cols=3,
     if merge_sheets:
         create_merged_pdf(num_cols, num_rows, output_file, page_size, pdf, the_sheets)
     else:
-        create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, pdf, the_sheets)
+        create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, the_sheets)
 
 
 def create_merged_pdf(num_cols, num_rows, output_file, page_size, pdf, the_sheets):
@@ -97,12 +129,13 @@ def create_merged_pdf(num_cols, num_rows, output_file, page_size, pdf, the_sheet
     num_pages = math.ceil(len(rows) / page_size)
     for page_number in range(num_pages):
         first_values, second_values = extract_page_from_excel(rows, page_number, num_rows, num_cols)
-        create_pdf_page(pdf, text_values=first_values, default_text='', num_rows=num_rows, num_cols=num_cols)
+        create_pdf_page(pdf, text_values=first_values, default_text='', num_rows=num_rows, num_cols=num_cols,
+                        dashed_lines=True)
         create_pdf_page(pdf, text_values=second_values, default_text='', num_rows=num_rows, num_cols=num_cols)
     pdf.output(output_file, 'F')
 
 
-def create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, pdf, the_sheets):
+def create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, the_sheets):
     for sheet in tqdm(the_sheets):
         pdf = FPDF(format='A4', orientation='L')
         pdf.set_auto_page_break(False)
@@ -112,7 +145,8 @@ def create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, pdf, t
         num_pages = math.ceil(len(rows) / page_size)
         for page_number in range(num_pages):
             first_values, second_values = extract_page_from_excel(rows, page_number, num_rows, num_cols)
-            create_pdf_page(pdf, text_values=first_values, default_text='', num_rows=num_rows, num_cols=num_cols)
+            create_pdf_page(pdf, text_values=first_values, default_text='', num_rows=num_rows, num_cols=num_cols,
+                            dashed_lines=True)
             create_pdf_page(pdf, text_values=second_values, default_text='', num_rows=num_rows, num_cols=num_cols)
         # append the name of the sheet to the output file and save it using pathlib
         sheet_output_file = output_path.with_name(f"{output_path.stem}_{sheet.title}.pdf")
