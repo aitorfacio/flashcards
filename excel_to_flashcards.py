@@ -5,6 +5,8 @@ from pathlib import Path
 from openpyxl import load_workbook
 from fpdf import FPDF
 from tqdm import tqdm
+from session_management import save_word_in_session, get_session_words
+
 
 
 def page_format_to_dimensions(page_format, orientation='P'):
@@ -100,7 +102,9 @@ def list_excel_sheets(excel_file):
 
 
 def create_pdf_from_excel(excel_file, num_rows=3, num_cols=3,
-                          output_file='output.pdf', merge_sheets=False, selected_sheets=None):
+                          output_file='output.pdf', merge_sheets=False,
+                          selected_sheets=None, session_name=None,
+                          complete_pages=False):
     if merge_sheets:
         pdf = FPDF(format='A4', orientation='L')
         pdf.set_auto_page_break(False)
@@ -115,34 +119,50 @@ def create_pdf_from_excel(excel_file, num_rows=3, num_cols=3,
 
     output_path = Path(output_file)
     if merge_sheets:
-        create_merged_pdf(num_cols, num_rows, output_file, page_size, pdf, the_sheets)
+        create_merged_pdf(num_cols, num_rows, output_file, page_size, pdf, the_sheets, session_name, complete_pages)
     else:
-        create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, the_sheets)
+        create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, the_sheets, session_name, complete_pages)
 
 
-def create_merged_pdf(num_cols, num_rows, output_file, page_size, pdf, the_sheets):
+def create_merged_pdf(num_cols, num_rows, output_file, page_size, pdf, the_sheets, session_name, complete_pages):
     rows = []
     for sheet in tqdm(the_sheets):
-        sheet_rows = [(row[0].value, row[1].value) for row in sheet.iter_rows()]
+        words_in_session = []
+        if session_name:
+            words_in_session = get_session_words(session_name)
+        sheet_rows = [(row[0].value, row[1].value) for row in sheet.iter_rows() if row[0].value not in words_in_session]
         sheet_rows = sheet_rows[1:]  # remove the first row header
         rows.extend(sheet_rows)
+    if len(rows) == 0:
+        return
     num_pages = math.ceil(len(rows) / page_size)
+    if complete_pages:
+        num_pages = math.floor(len(rows) / page_size)
     for page_number in range(num_pages):
         first_values, second_values = extract_page_from_excel(rows, page_number, num_rows, num_cols)
+        # add all the first values to the session
+        if session_name:
+            for value in first_values:
+                save_word_in_session(session_name, value)
         create_pdf_page(pdf, text_values=first_values, default_text='', num_rows=num_rows, num_cols=num_cols,
                         dashed_lines=True)
         create_pdf_page(pdf, text_values=second_values, default_text='', num_rows=num_rows, num_cols=num_cols)
     pdf.output(output_file, 'F')
 
 
-def create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, the_sheets):
+def create_pdfs_per_worksheet(num_cols, num_rows, output_path, page_size, the_sheets, session_name, complete_pages):
     for sheet in tqdm(the_sheets):
         pdf = FPDF(format='A4', orientation='L')
         pdf.set_auto_page_break(False)
-        rows = [(row[0].value, row[1].value) for row in sheet.iter_rows()]
+        words_in_session = []
+        if session_name:
+            words_in_session = get_session_words(session_name)
+        rows = [(row[0].value, row[1].value) for row in sheet.iter_rows() if row[0].value not in words_in_session]
         rows = rows[1:]  # remove the first row header
         # the number of pages is the number of rows divided by the page size, rounded up
         num_pages = math.ceil(len(rows) / page_size)
+        if complete_pages:
+            num_pages = math.floor(len(rows) / page_size)
         for page_number in range(num_pages):
             first_values, second_values = extract_page_from_excel(rows, page_number, num_rows, num_cols)
             create_pdf_page(pdf, text_values=first_values, default_text='', num_rows=num_rows, num_cols=num_cols,
@@ -164,10 +184,13 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--show', action='store_true', help='Show the sheets in the excel file', default=False)
     # argument to select the sheets to merge
     parser.add_argument('-t', '--sheets', type=int, help='The sheets to merge', nargs='+')
+    parser.add_argument('-d', '--database_session', type=str, help='The database session to use', default=None)
+    parser.add_argument('--complete_pages', action='store_true', help='Create only complete pages', default=False)
     args = parser.parse_args()
     if not args.show:
         create_pdf_from_excel(args.file, args.rows, args.cols, args.output,
-                              merge_sheets=args.merge, selected_sheets=args.sheets)
+                              merge_sheets=args.merge, selected_sheets=args.sheets,
+                              session_name=args.database_session,complete_pages=args.complete_pages)
     else:
         sheets = list_excel_sheets(args.file)
         # print the sheets in the excel file, one each line

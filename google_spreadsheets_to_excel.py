@@ -62,7 +62,7 @@ def main(key=None, select_genders=False):
             if not femenin_df.empty:
                 femenin_df.to_excel(writer, sheet_name='Femenin', index=False)
             if not neutral_df.empty:
-                neutral_df.to_excel(writer, sheet_name='Neutral', index=False)
+                neutral_df.to_excel(writer, sheet_name='Neutrum', index=False)
             if not other_df.empty:
                 other_df.to_excel(writer, sheet_name='Other', index=False)
 
